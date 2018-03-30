@@ -1,1 +1,2 @@
 # ComplicationsHospital
+I will analyze the Complications-Hospital dataset, which is an official dataset used on the Medicare.gov Hospital Compare Website provided by the Centers for Medicare & Medicaid Services. This dataset allows you to compare the quality of care on complications at over 4,000 Medicare-certified hospitals across the country. It is from https://data.medicare.gov/data/hospital-compare. It was accessed on October 9, 2017 by clicking on the "Export - Download As CSV for Excel" button. I used the library dplyr in the analysis.
