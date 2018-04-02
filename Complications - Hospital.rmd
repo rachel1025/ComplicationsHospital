@@ -1,0 +1,191 @@
+---
+title: "Complications - Hospital"
+author: "Shu-Han Chang"
+date: "10/9/2017"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+```
+### Introduction
+
+I will analyze the Complications-Hospital dataset, which is an official dataset used on the Medicare.gov Hospital Compare Website provided by the Centers for Medicare & Medicaid Services. This dataset allows you to compare the quality of care on complications at over 4,000 Medicare-certified hospitals across the country. It is from https://data.medicare.gov/data/hospital-compare. It was accessed on October 9, 2017 by clicking on the "Export - Download As CSV for Excel" button. I used the library dplyr in the analysis.
+
+### Data Acquisition and Selection
+
+After downloading the csv file, I imported the dataset into R and kept only the columns needed for analysis. The file includes 81804 rows and 19 variables, which includes:
+
+1. Provider ID
+2. Hospital Name
+3. Address
+4. City
+5. State
+6. ZIP Code
+7. County Name
+8. Phone Number
+9. Measure Name
+10. Measure ID
+11. Compared to National
+12. Denominator
+13. Score
+14. Lower Estimate
+15. Higher Estimate
+16. Footnote
+17. Meausure Start Date
+18. Measure End State
+19. Location
+
+```{r getdata} 
+library(readr)
+Complications_and_Deaths_Hospital <- read_csv("C:/Users/linds/OneDrive/Fall 2017/Fall 2017/STAT-612 R/HW/HW4/Complications_and_Deaths_-_Hospital.csv", na = "Not Available")
+
+#calculate the size of the dataset
+nrow(Complications_and_Deaths_Hospital)
+ncol(Complications_and_Deaths_Hospital)
+
+#Create a new dataset, rename the variables and keep the variables needed for analysis
+comps <- Complications_and_Deaths_Hospital %>%
+          rename(hospital = 'Hospital Name',
+                 compare = 'Compared to National',
+                 lower = 'Lower Estimate',
+                 higher = 'Higher Estimate',
+                 measure_id = 'Measure ID',
+                 state = State,
+                 score = Score,
+                 city = City,
+                 measure_name = 'Measure Name') %>%
+          filter(!is.na(score)) %>% #choose those that don't have na
+          select(hospital, compare, lower, higher, measure_id, state, city, score, measure_name)
+```
+After filtering the records with no score and selecting the variables needed for analysis, there are 48281 records and 9 variables left in the new dataset "comp".
+
+For the complication "Broken hip from a fall after surgery", I selected the data and write out a csv file, which includes hospital name, city, state, compared to national, score, lower estimate, and higher estimate.
+
+After filtering the dataset with the measure ID of "Broken hip from a fall after surgery", the resulting file has 2850 records for each of the 7 variables that I chose.
+```{r}
+comps_hip <- comps %>% 
+  filter(measure_id == "PSI_8_POST_HIP") %>% 
+  select(hospital, city, state, compare, score, lower, higher)
+
+write.csv(comps_hip, file = "comps_hip.csv",row.names = FALSE, na="")
+```
+
+### Data Analysis
+
+#### Find the best hospital in state for a specific complication
+
+To figure out if a high score or low score is better, I first found the national rate for the complication we selected, looked at the hospitals with rates below the national average, and arranged it by score or higher estimate.
+```{r}
+comps_hip %>%
+  select(score,compare,lower,higher) %>%
+  arrange(score)
+
+comps_hip %>%
+  select(score,compare,lower,higher) %>%
+  arrange(higher)
+```
+According to the results above, the best hospitals should be judged as those with the lowest high estimate score.
+
+Based on the results above, I wrote a best function that will take the id of a complication and a state as inputs, and return the hospital in the specified state with the lowest high estimate score for the complication.
+
+```{r error=TRUE}
+best <- function(ST, Complication) {
+
+  FindST <- comps$state == ST
+    if (sum(FindST)==0) stop ("invalid state entered")
+
+  FindComplication <- comps$measure_id == Complication
+    if (sum(FindComplication)==0) stop ("invalid complication entered")
+
+  FindBoth <- FindComplication & FindST
+    if (sum(FindBoth)==0) stop ("No entries found for the requested complication/state combination")
+   
+  BestDataOut <-  comps %>%
+    filter(state == ST, measure_id == Complication) %>%
+    select(hospital, state, higher, score, measure_id) %>%
+    arrange(higher, score) 
+  
+  BestDataOut <- BestDataOut[1,]  
+  
+}
+```
+
+To test the best function for both valid and invalid inputs, I inserted a few inputs into the function.
+```{r error=TRUE}
+(bestdata1 <- best("DC" , "PSI_4_SURG_COMP"))
+(bestdata2 <- best("AP" , "PSI_4_SURG_COMP"))
+(bestdata3 <- best("DC", "pneumonia"))
+```
+
+#### Find the best hospitals in state for a specific complication
+
+I then ranked the top n hospitals in a state with a given complication, if the number n is not inserted in the function or if n is larger than the number of hospitals in the state, the function will rank all the hospitals in the state.
+```{r error=TRUE}
+rankhospitalsinstate <- function(ST, Complication, n) {
+
+  FindST <- comps$state == ST
+    if (sum(FindST) == 0) stop ("invalid state entered")
+
+  FindComplication <- comps$measure_id == Complication
+    if (sum(FindComplication) == 0) stop ("invalid complication entered")
+
+  FindBoth <- FindComplication & FindST
+    if (sum(FindBoth) == 0) stop ("No entries found for the requested state and complication combination") 
+  StateData <- comps %>%
+    filter(state == ST, measure_id == Complication) %>%
+    select(hospital, state, higher, score) 
+
+    if (missing(n)) {
+      n <- length(StateData$state)
+    }
+  
+    if (n > length(StateData$state)) {
+      n <- length(StateData$state) 
+    }
+
+  StateData <- arrange(StateData, higher, score)
+  knitr::kable(StateData[1:n,]) #:: <- specify which package you want to use with the function
+                                #kable - create a table 
+}
+```
+
+To test the function, I inserted "VA", "PSI_15_ACC_LAC",10 to check for the top 10 hospitals in Virginia with the complication ""Accidental cuts and tears from medical treatment". In addition to top 10 hospitals, I also tried inserting 500 hospitals and omitting the number of hospitals in the function.
+
+```{r error=TRUE}
+rankhospitalsinstate("VA","PSI_15_ACC_LAC",10)
+rankhospitalsinstate("VA","PSI_15_ACC_LAC",500)
+rankhospitalsinstate("VA","PSI_15_ACC_LAC")
+```
+
+#### Rank all hospitals in the country for a specific complication
+
+Lastly, I ranked the top hospitals in the country for a complication by selecting the records for all hospitals with a specific complication.
+
+```{r error=TRUE}
+rankallhospitals <- function(Complication, num=1) {
+  #if don't provide the value of "num" in the function to overwrite it, 1 is the default
+  RankHospital <- comps %>%
+    filter(measure_id == Complication) %>%
+    select(hospital, state, higher, score, measure_id) %>%
+    arrange(higher,score)
+  
+  RankHospital[1:num,]
+}
+```
+
+To test the function, I checked the top 10 hospitals in the country with the complication "Serious blood clots after surgery". In addition to that, I also tested the function by omitting the number of hospitals in the function, with the complication "A wound that splits open after surgery on the abdomen or pelvis".
+
+```{r error=TRUE}
+rankallhospitals("PSI_12_POSTOP_PULMEMB_DVT",10)
+rankallhospitals("PSI_14_POSTOP_DEHIS")
+```
+
+### System Information
+
+```{r}
+sessionInfo()
+```
